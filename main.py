@@ -1,10 +1,14 @@
 from fastapi import FastAPI, Depends
 from schemas import ProductCreate, ProductResponse
-from routers.products import router as products_router, products
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 
 from database import get_db
+
+from routers.products import router as products_router
+from routers.categories import router as categories_router
+from routers.warehouses import router as warehouses_router
+from routers.users import router as users_router
 
 app = FastAPI(
     title="Warehouse and Inventory Management",
@@ -12,6 +16,9 @@ app = FastAPI(
     version="1.0.0",
 )
 app.include_router(products_router)
+app.include_router(categories_router)
+app.include_router(warehouses_router)
+app.include_router(users_router)
 
 @app.get("/")
 def home() -> dict[str, str]:

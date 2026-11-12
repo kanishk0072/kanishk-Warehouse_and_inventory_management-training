@@ -1,4 +1,11 @@
-from models.warehouse import Warehouse
-from models.user import User
+from .category import Category
+from .product import Product
+from .user import User
+from .warehouse import Warehouse
 
-all = ["Warehouse", "User"]
+__all__ = [
+    "Category",
+    "Product",
+    "User",
+    "Warehouse",
+]
