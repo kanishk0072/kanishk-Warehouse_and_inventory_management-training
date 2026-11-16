@@ -1,24 +1,19 @@
 from fastapi import FastAPI, Depends
-from schemas import ProductCreate, ProductResponse
-from sqlalchemy import text, select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
 
-from routers.products import router as products_router
-from routers.categories import router as categories_router
-from routers.warehouses import router as warehouses_router
-from routers.users import router as users_router
+from api.v1.router import api_router
 
 app = FastAPI(
     title="Warehouse and Inventory Management",
     description="FastAPI Project",
     version="1.0.0",
 )
-app.include_router(products_router)
-app.include_router(categories_router)
-app.include_router(warehouses_router)
-app.include_router(users_router)
+
+app.include_router(api_router, prefix="/api/v1")
+
 
 @app.get("/")
 def home() -> dict[str, str]:
@@ -33,24 +28,24 @@ def db_check(db: Session = Depends(get_db)) -> dict[str, str]:
         "message": "Database connection is working",
     }
 
-@app.get("/search", response_model=list[ProductResponse])
-def search_products(
-    q: str = "",
-    category: str | None = None,
-) -> list[dict]:
-    results = products
+# @app.get("/search", response_model=list[ProductResponse])
+# def search_products(
+#     q: str = "",
+#     category: str | None = None,
+# ) -> list[dict]:
+#     results = products
 
-    if q:
-        results = [
-            product
-            for product in results
-            if q.lower() in product["name"].lower()
-        ]
+#     if q:
+#         results = [
+#             product
+#             for product in results
+#             if q.lower() in product["name"].lower()
+#         ]
 
-    if category:
-        results = [
-        product for product in results
-        if product["category"]["name"].lower() == category.lower()
-    ]
+#     if category:
+#         results = [
+#         product for product in results
+#         if product["category"]["name"].lower() == category.lower()
+#     ]
 
-    return results
+#     return results

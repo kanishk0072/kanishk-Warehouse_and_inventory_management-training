@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User, Warehouse
+from auth_dependencies import require_admin
 from schemas import (
     UserCreate,
     UserPatch,
@@ -14,7 +15,7 @@ from schemas import (
 )
 from security import get_password_hash
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(require_admin)])
 
 
 def check_warehouse(db: Session, warehouse_id: int | None) -> None:
