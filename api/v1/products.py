@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Category, Product
 from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch
+from dependencies.pagination import get_pagination
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -49,8 +50,18 @@ def create_product(
     return product
 
 @router.get("/", response_model=list[ProductResponse])
-def list_products(db: Session = Depends(get_db)) -> list[Product]:
-    products = db.scalars(select(Product)).all()
+def list_products(
+    db: Session = Depends(get_db),
+    pagination: dict[str, int] = Depends(get_pagination),
+) -> list[Product]:
+
+    products = db.scalars(
+        select(Product)
+        .order_by(Product.id)
+        .offset(pagination["skip"])
+        .limit(pagination["limit"])
+    ).all()
+
     return products
 
 

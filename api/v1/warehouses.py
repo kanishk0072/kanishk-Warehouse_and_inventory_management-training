@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from auth_dependencies import require_manager_or_admin
 from database import get_db
 from models import User, Warehouse
 from schemas import (
@@ -11,6 +12,8 @@ from schemas import (
     WarehouseResponse,
     WarehouseUpdate,
 )
+from auth_dependencies import require_manager_or_admin
+from dependencies.pagination import get_pagination
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 
@@ -22,6 +25,7 @@ router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 )
 def create_warehouse(
     warehouse_data: WarehouseCreate,
+    current_user: User = Depends(require_manager_or_admin),
     db: Session = Depends(get_db),
 ):
     warehouse = Warehouse(**warehouse_data.model_dump())
@@ -39,12 +43,20 @@ def create_warehouse(
 
     return warehouse
 
-
 @router.get("", response_model=list[WarehouseResponse])
-def list_warehouses(db: Session = Depends(get_db)) -> list[Warehouse]:
-    warehouses = db.scalars(select(Warehouse)).all()
-    return warehouses
+def list_warehouses(
+    db: Session = Depends(get_db),
+    pagination: dict[str, int] = Depends(get_pagination),
+) -> list[Warehouse]:
+    
+    warehouses = db.scalars(
+        select(Warehouse)
+        .order_by(Warehouse.id)
+        .offset(pagination["skip"])
+        .limit(pagination["limit"])
+    ).all()
 
+    return warehouses
 
 @router.get("/{warehouse_id}", response_model=WarehouseResponse)
 def get_warehouse(
