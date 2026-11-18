@@ -5,6 +5,8 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from fastapi import BackgroundTasks
+from tasks.welcome_email import simulate_welcome_email
 
 from auth_dependencies import (
     get_current_user,
@@ -39,6 +41,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 )
 def signup(
     data: SignupRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     email = str(data.email).strip().lower()
@@ -47,7 +50,7 @@ def signup(
         select(User).where(
             func.lower(User.email) == email
         )
-    )
+    )p
 
     if existing:
         raise HTTPException(
@@ -75,6 +78,12 @@ def signup(
         )
 
     db.refresh(user)
+
+    background_tasks.add_task(
+        simulate_welcome_email,
+        user.email,    
+    )
+
     return user
 
 

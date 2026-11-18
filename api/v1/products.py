@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -7,12 +7,13 @@ from database import get_db
 from models import Category, Product
 from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch
 from dependencies.pagination import get_pagination
-
+from tasks.inventory_notifications import notify_inventory_team
 router = APIRouter(prefix="/products", tags=["Products"])
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
         product_data: ProductCreate,
+        background_tasks: BackgroundTasks,
         db: Session = Depends(get_db),
 ) -> Product:
     existing_product = db.scalar(
@@ -46,6 +47,11 @@ def create_product(
             detail="could not create product check sku and category",
         )
     db.refresh(product)
+
+    background_tasks.add_task(
+    notify_inventory_team,
+    product.sku,
+)
 
     return product
 
