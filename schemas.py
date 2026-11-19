@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 class Category(BaseModel):
     id: int = Field(gt=0)
@@ -38,3 +39,16 @@ class ProductResponse(BaseModel):
     in_stock: bool
     tags: list[str]
     category: Category
+
+
+class UserCreate(BaseModel):
+    id: int = Field(gt=0)
+    name: str = Field(min_length=2, max_length=50)
+    email: EmailStr 
+    password: str = Field(min_length=8, max_length=128)
+    active: bool | None = None
+
+
+class WarehouseCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    location: str = Field(min_length=1, max_length=255)

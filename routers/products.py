@@ -1,21 +1,21 @@
 from fastapi import APIRouter, HTTPException, status
 from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch
 
-router = APIRouter()
+router = APIRouter(prefix="/products", tags=["Products"])
 
 products: list[dict] = []
 
-@router.get("/products", response_model=list[ProductResponse])
+@router.get("/", response_model=list[ProductResponse])
 def get_products() -> list[dict]:
     return products
 
-@router.post("/products", response_model=ProductResponse,status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductResponse,status_code=status.HTTP_201_CREATED)
 def create_product(product: ProductCreate) -> dict:
     new_product = product.model_dump()
     products.append(new_product)
     return new_product
 
-@router.get("/products/{product_id}", response_model=ProductResponse)
+@router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int) -> dict:
     for product in products:
         if product["id"] == product_id:
@@ -25,7 +25,7 @@ def get_product(product_id: int) -> dict:
         detail=f"Product ID {product_id} not found"
     )
 
-@router.delete("/products/{product_id}",status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{product_id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(product_id: int):
     for product in products:
         if product["id"] == product_id:
@@ -36,7 +36,7 @@ def delete_product(product_id: int):
                         detail="product ID {product_id} not found"
     )
     
-@router.put("/products/{product_id}",response_model=ProductResponse)
+@router.put("/{product_id}",response_model=ProductResponse)
 def update_product(
     product_id: int,
     product: ProductUpdate
@@ -56,7 +56,7 @@ def update_product(
         detail=f"Product ID {product_id} not found"
     )
 
-@router.patch("/products/{product_id}", response_model=ProductResponse)
+@router.patch("/{product_id}", response_model=ProductResponse)
 def patch_product(product_id: int, product: ProductPatch) -> dict:
     for existing_product in products:
         if existing_product["id"] == product_id:
