@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import BackgroundTasks
 from tasks.welcome_email import simulate_welcome_email
+from rate_limiter import limit_login_requests
 
 from auth_dependencies import (
     get_current_user,
@@ -88,7 +89,7 @@ def signup(
 
 
 # 2. LOGIN
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(limit_login_requests)])
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),

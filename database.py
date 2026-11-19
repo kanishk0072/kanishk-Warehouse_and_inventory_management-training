@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     DATABASE_URL: str
     FRONTEND_ORIGIN: str
+    REDIS_URL: str
+    CELERY_BROKER_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

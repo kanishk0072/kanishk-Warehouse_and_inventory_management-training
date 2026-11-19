@@ -1,14 +1,25 @@
-from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Category, Product
-from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch
+from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch, product
 from dependencies.pagination import get_pagination
-from tasks.inventory_notifications import notify_inventory_team
+from tasks.inventory_notification import notify_inventory_team
+from tasks.welcome_email import simulate_welcome_email
+from redis_client import redis_client   
+import json
+
 router = APIRouter(prefix="/products", tags=["Products"])
+
+
+def invalidate_products_cache():
+    for key in redis_client.scan_iter(
+        match="products:list:v1:*"
+    ):
+        redis_client.delete(key)
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
@@ -48,27 +59,56 @@ def create_product(
         )
     db.refresh(product)
 
-    background_tasks.add_task(
-    notify_inventory_team,
-    product.sku,
-)
+    invalidate_products_cache()
+    notify_inventory_team.delay(product.sku)
 
     return product
 
 @router.get("/", response_model=list[ProductResponse])
 def list_products(
+    response: Response,
     db: Session = Depends(get_db),
     pagination: dict[str, int] = Depends(get_pagination),
-) -> list[Product]:
+):
+    skip = pagination["skip"]
+    limit = pagination["limit"]
 
+    cache_key = f"products:list:v1:skip={skip}:limit={limit}"
+
+    # Check Redis cache
+    cached_products = redis_client.get(cache_key)
+
+    if cached_products is not None:
+        response.headers["X-Cache"] = "HIT"
+        return json.loads(cached_products)
+
+    # Fetch from PostgreSQL on cache miss
     products = db.scalars(
         select(Product)
         .order_by(Product.id)
-        .offset(pagination["skip"])
-        .limit(pagination["limit"])
+        .offset(skip)
+        .limit(limit)
     ).all()
 
-    return products
+    # Convert ORM objects to JSON-compatible data
+    product_data = [
+        ProductResponse.model_validate(
+            product,
+            from_attributes=True,
+        ).model_dump(mode="json")
+        for product in products
+    ]
+
+    # Save in Redis for 60 seconds
+    redis_client.set(
+        cache_key,
+        json.dumps(product_data),
+        ex=60,
+    )
+
+    response.headers["X-Cache"] = "MISS"
+
+    return product_data
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
@@ -103,6 +143,8 @@ def update_product(
     db.commit()
     db.refresh(product)
 
+    invalidate_products_cache()
+
     return product
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -117,3 +159,4 @@ def delete_product(product_id: int, db: Session = Depends(get_db)) -> None:
 
     db.delete(product)
     db.commit()
+    invalidate_products_cache()
