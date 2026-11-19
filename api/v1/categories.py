@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from database import get_db
 from models import Category
+from dependencies.pagination import get_pagination
 
 
 router = APIRouter(prefix="/categories", tags=["Categories"])
@@ -39,8 +40,18 @@ def create_category(
     return category
 
 @router.get("/", response_model=list[CategoryResponse])
-def list_categories(db: Session = Depends(get_db)) -> list[Category]:
-    categories = db.scalars(select(Category)).all()
+def list_categories(
+    db: Session = Depends(get_db),
+    pagination: dict[str, int] = Depends(get_pagination),
+) -> list[Category]:
+
+    categories = db.scalars(
+        select(Category)
+        .order_by(Category.id)
+        .offset(pagination["skip"])
+        .limit(pagination["limit"])
+    ).all()
+
     return categories
 
 @router.get("/{category_id}", response_model=CategoryResponse)
