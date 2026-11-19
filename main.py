@@ -66,3 +66,7 @@ async def log_requests(request: Request, call_next):
     response.headers["X-Process-Time-Ms"] = f"{duration:.2f}"
 
     return response
+
+@app.get("/health", tags=["Health"])
+def health_check():
+    return {"status": "healthy"}

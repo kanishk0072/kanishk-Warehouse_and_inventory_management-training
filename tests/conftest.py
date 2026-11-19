@@ -84,3 +84,29 @@ def client(db_session):
             yield test_client
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+@pytest.fixture(autouse=True)
+def mock_external_services(monkeypatch):
+    from main import app
+    from rate_limiter import limit_login_requests
+    from redis_client import redis_client
+    from tasks.inventory_notification import notify_inventory_team
+
+    # Disable login rate limiting for Module 9 tests
+    app.dependency_overrides[limit_login_requests] = lambda: None
+
+    # Mock Redis caching
+    monkeypatch.setattr(redis_client, "get", lambda *args, **kwargs: None)
+    monkeypatch.setattr(redis_client, "set", lambda *args, **kwargs: True)
+    monkeypatch.setattr(redis_client, "scan_iter", lambda *args, **kwargs: iter(()))
+
+    # Mock Celery notification
+    monkeypatch.setattr(
+        notify_inventory_team,
+        "delay",
+        lambda *args, **kwargs: None,
+    )
+
+    yield
+
+    app.dependency_overrides.pop(limit_login_requests, None)

@@ -1,5 +1,6 @@
 from sqlalchemy import select
 from models import User
+import pytest
 
 
 def test_signup_success(client, db_session, monkeypatch):
@@ -61,9 +62,6 @@ def test_signup_duplicate_email(client, monkeypatch):
 
     assert second_response.status_code == 409
     assert second_response.json()["detail"] == "Email already registered"
-
-
-import pytest
 
 
 @pytest.fixture
