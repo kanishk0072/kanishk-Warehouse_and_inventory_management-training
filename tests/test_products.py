@@ -1,3 +1,12 @@
+from api.v1.products import notify_inventory_team
+
+def test_duplicate_product_sku(client, monkeypatch):
+    monkeypatch.setattr(
+        notify_inventory_team,
+        "delay",
+        lambda sku: None,
+    )
+
 def test_product_full_crud(client):
     # 1. CREATE PRODUCT
     product_data = {
