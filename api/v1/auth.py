@@ -50,7 +50,7 @@ def signup(
         select(User).where(
             func.lower(User.email) == email
         )
-    )p
+    )
 
     if existing:
         raise HTTPException(
