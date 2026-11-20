@@ -112,6 +112,11 @@ async def log_requests(request: Request, call_next):
 
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Process-Time-Ms"] = str(duration)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
 
         return response
 

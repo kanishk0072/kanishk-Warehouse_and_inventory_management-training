@@ -6,6 +6,7 @@ UserRole = Literal["admin", "manager", "staff"]
 
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=2, max_length=50)
     email: EmailStr 
     role: UserRole | None = "staff"
