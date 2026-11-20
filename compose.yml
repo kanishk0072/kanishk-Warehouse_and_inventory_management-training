@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${COMPOSE_DB_USER}
+      POSTGRES_PASSWORD: ${COMPOSE_DB_PASSWORD}
+      POSTGRES_DB: ${COMPOSE_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    image: warehouse-api:compose
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${COMPOSE_DB_USER}:${COMPOSE_DB_PASSWORD_URLENCODED}@db:5432/${COMPOSE_DB_NAME}"
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery:
+    image: warehouse-api:compose
+    command: ["celery", "-A", "celery_app:celery_app", "worker", "--loglevel=info"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${COMPOSE_DB_USER}:${COMPOSE_DB_PASSWORD}@db:5432/${COMPOSE_DB_NAME}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
