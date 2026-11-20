@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks, 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from database import get_db
 from models import Category, Product
@@ -64,7 +65,12 @@ def create_product(
 
     return product
 
-@router.get("/", response_model=list[ProductResponse])
+@router.get(
+    "/",
+    response_model=dict,
+    summary="List products",
+    description="Fetch products with pagination.",
+)
 def list_products(
     response: Response,
     db: Session = Depends(get_db),
@@ -73,6 +79,20 @@ def list_products(
     skip = pagination["skip"]
     limit = pagination["limit"]
 
+    total = db.scalar(select(func.count()).select_from(Product)) or 0
+
+    def format_response(items):
+        return {
+            "success": True,
+            "data": {
+                "total": total,
+                "page": skip // limit + 1,
+                "limit": limit,
+                "items": items,
+            },
+        }
+        
+
     cache_key = f"products:list:v1:skip={skip}:limit={limit}"
 
     # Check Redis cache
@@ -80,7 +100,7 @@ def list_products(
 
     if cached_products is not None:
         response.headers["X-Cache"] = "HIT"
-        return json.loads(cached_products)
+        return format_response(json.loads(cached_products))
 
     # Fetch from PostgreSQL on cache miss
     products = db.scalars(
@@ -108,7 +128,7 @@ def list_products(
 
     response.headers["X-Cache"] = "MISS"
 
-    return product_data
+    return format_response(product_data)
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

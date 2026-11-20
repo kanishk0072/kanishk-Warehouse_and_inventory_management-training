@@ -1,11 +1,13 @@
 from api.v1.products import notify_inventory_team
 
+
 def test_duplicate_product_sku(client, monkeypatch):
     monkeypatch.setattr(
         notify_inventory_team,
         "delay",
         lambda sku: None,
     )
+
 
 def test_product_full_crud(client):
     # 1. CREATE PRODUCT
@@ -40,9 +42,13 @@ def test_product_full_crud(client):
     response = client.get("/api/v1/products/")
 
     assert response.status_code == 200
+
+    # Updated for Module 13 pagination response
+    products = response.json()["data"]["items"]
+
     assert any(
         product["id"] == product_id
-        for product in response.json()
+        for product in products
     )
 
     # 4. UPDATE PRODUCT

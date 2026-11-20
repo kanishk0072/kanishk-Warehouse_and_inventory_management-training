@@ -61,7 +61,7 @@ def test_signup_duplicate_email(client, monkeypatch):
     )
 
     assert second_response.status_code == 409
-    assert second_response.json()["detail"] == "Email already registered"
+    assert second_response.json()["error"]["message"] == "Email already registered"
 
 
 @pytest.fixture
