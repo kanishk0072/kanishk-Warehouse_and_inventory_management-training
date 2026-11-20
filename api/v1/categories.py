@@ -39,7 +39,12 @@ def create_category(
 
     return category
 
-@router.get("/", response_model=list[CategoryResponse])
+@router.get("/",
+    response_model=list[CategoryResponse],
+    summary="List all categories",
+    description="Retrieve a list of all categories in the warehouse inventory.",
+    response_description="List of categories",        
+)
 def list_categories(
     db: Session = Depends(get_db),
     pagination: dict[str, int] = Depends(get_pagination),

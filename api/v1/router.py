@@ -9,10 +9,10 @@ from api.v1 import (
 )
 
 
-api_router = APIRouter()
+resource_routers = (
+    auth.router, products.router, categories.router, warehouses.router, users.router,
+)
 
-api_router.include_router(auth.router)
-api_router.include_router(products.router)
-api_router.include_router(categories.router)
-api_router.include_router(warehouses.router)
-api_router.include_router(users.router)
+api_router = APIRouter()
+for resource_router in resource_routers:
+    api_router.include_router(resource_router)
