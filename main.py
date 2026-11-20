@@ -1,16 +1,22 @@
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
+from redis.exceptions import RedisError
+from redis_client import redis_client
 
 from database import get_db, settings
 from api.v1.router import api_router
 import logging
 import time
+import uuid
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.INFO)
+from logging_config import configure_logging, request_id_ctx
 
+
+configure_logging()
+logger = logging.getLogger("warehouse.api")
 
 app = FastAPI(
     title="Warehouse and Inventory Management",
@@ -44,29 +50,66 @@ app.add_middleware(
         "Content-Type",
         "X-Client-Source",
     ],
-    expose_headers=["X-Process-Time-Ms"],
+    expose_headers=["X-Process-Time-Ms", "X-Request-ID"],
 )
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    start_time = time.perf_counter()
+    request_id = str(uuid.uuid4())
+    token = request_id_ctx.set(request_id)
 
-    response = await call_next(request)
+    start = time.perf_counter()
 
-    duration = (time.perf_counter() - start_time) * 1000
+    try:
+        response = await call_next(request)
 
-    logger.info(
-        "%s %s | Status: %s | Time: %.2f ms",
-        request.method,
-        request.url.path,
-        response.status_code,
-        duration,
-    )
+        duration = round(
+            (time.perf_counter() - start) * 1000, 2
+        )
 
-    response.headers["X-Process-Time-Ms"] = f"{duration:.2f}"
+        logger.info(
+            "request_completed",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration,
+            },
+        )
 
-    return response
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time-Ms"] = str(duration)
+
+        return response
+
+    except Exception:
+        logger.exception("request_failed")
+        raise
+
+    finally:
+        request_id_ctx.reset(token)
 
 @app.get("/health", tags=["Health"])
 def health_check():
+    logger.info("health_check_called")
     return {"status": "healthy"}
+
+@app.get("/ready", tags=["Health"])
+def readiness_check(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        redis_client.ping()
+
+        return {
+            "status": "ready",
+            "postgres": "connected",
+            "redis": "connected",
+        }
+
+    except (SQLAlchemyError, RedisError):
+        logger.exception("readiness_check_failed")
+
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily unavailable",
+        )
