@@ -8,8 +8,19 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from database import Base, get_db, engine as dev_engine
-import models
+from models import User
 from main import app
+from auth_dependencies import get_current_user
+
+test_user = User(
+    id=1,
+    name="Test User",
+    email="test@example.com",
+    role="admin",
+    warehouse_id=None,
+)
+
+app.dependency_overrides[get_current_user] = lambda: test_user
 
 
 # 1. Connect only to the TEST database

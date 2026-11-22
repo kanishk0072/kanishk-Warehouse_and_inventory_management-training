@@ -6,9 +6,10 @@ from sqlalchemy.exc import IntegrityError
 from database import get_db
 from models import Category
 from dependencies.pagination import get_pagination
+from auth_dependencies import get_current_user
 
 
-router = APIRouter(prefix="/categories", tags=["Categories"])
+router = APIRouter(prefix="/categories", tags=["Categories"], dependencies=[Depends(get_current_user)],)
 
 @router.post("/", response_model=CategoryResponse)
 def create_category(
