@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from auth_dependencies import get_current_user
 
 from database import get_db
 from models import Category, Product
@@ -13,7 +14,7 @@ from tasks.welcome_email import simulate_welcome_email
 from redis_client import redis_client   
 import json
 
-router = APIRouter(prefix="/products", tags=["Products"])
+router = APIRouter(prefix="/products", tags=["Products"], dependencies=[Depends(get_current_user)],)
 
 
 def invalidate_products_cache():
