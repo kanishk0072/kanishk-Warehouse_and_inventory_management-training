@@ -1,19 +1,20 @@
-from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks, Response
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks, Response, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from auth_dependencies import get_current_user, require_admin
 
 from database import get_db
-from models import Category, Product
-from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch, product
+from models import Category, Product, User
+from schemas import ProductCreate, ProductResponse, ProductUpdate, ProductPatch
 from dependencies.pagination import get_pagination
 from tasks.inventory_notification import notify_inventory_team
 from tasks.welcome_email import simulate_welcome_email
 from redis_client import redis_client   
 import json
 
-router = APIRouter(prefix="/products", tags=["Products"])
+router = APIRouter(prefix="/products", tags=["Products"], dependencies=[Depends(get_current_user)],)
 
 
 def invalidate_products_cache():
@@ -75,61 +76,64 @@ def list_products(
     response: Response,
     db: Session = Depends(get_db),
     pagination: dict[str, int] = Depends(get_pagination),
+    category_id: int | None = None,
+    status_filter: str | None = Query(None, alias="status"),
+    search: str | None = None,
 ):
     skip = pagination["skip"]
     limit = pagination["limit"]
 
-    total = db.scalar(select(func.count()).select_from(Product)) or 0
+    query = select(Product)
 
-    def format_response(items):
-        return {
-            "success": True,
-            "data": {
-                "total": total,
-                "page": skip // limit + 1,
-                "limit": limit,
-                "items": items,
-            },
-        }
-        
+    if category_id is not None:
+        query = query.where(Product.category_id == category_id)
 
-    cache_key = f"products:list:v1:skip={skip}:limit={limit}"
+    if status_filter:
+        query = query.where(Product.status == status_filter)
 
-    # Check Redis cache
-    cached_products = redis_client.get(cache_key)
+    if search:
+        query = query.where(Product.name.ilike(f"%{search}%"))
 
-    if cached_products is not None:
-        response.headers["X-Cache"] = "HIT"
-        return format_response(json.loads(cached_products))
+    total = db.scalar(
+        select(func.count()).select_from(query.subquery())
+    ) or 0
 
-    # Fetch from PostgreSQL on cache miss
-    products = db.scalars(
-        select(Product)
-        .order_by(Product.id)
-        .offset(skip)
-        .limit(limit)
-    ).all()
-
-    # Convert ORM objects to JSON-compatible data
-    product_data = [
-        ProductResponse.model_validate(
-            product,
-            from_attributes=True,
-        ).model_dump(mode="json")
-        for product in products
-    ]
-
-    # Save in Redis for 60 seconds
-    redis_client.set(
-        cache_key,
-        json.dumps(product_data),
-        ex=60,
+    cache_key = (
+        f"products:list:v1:skip={skip}:limit={limit}"
+        f":category={category_id}:status={status_filter}:search={search}"
     )
 
-    response.headers["X-Cache"] = "MISS"
+    cached = redis_client.get(cache_key)
 
-    return format_response(product_data)
+    if cached is not None:
+        items = json.loads(cached)
+        response.headers["X-Cache"] = "HIT"
+    else:
+        products = db.scalars(
+            query.order_by(Product.id)
+            .offset(skip)
+            .limit(limit)
+        ).all()
 
+        items = [
+            ProductResponse.model_validate(
+                product, from_attributes=True
+            ).model_dump(mode="json")
+            for product in products
+        ]
+
+        redis_client.set(cache_key, json.dumps(items), ex=60)
+        response.headers["X-Cache"] = "MISS"
+
+    return {
+        "success": True,
+        "data": {
+            "total": total,
+            "page": skip // limit + 1,
+            "limit": limit,
+            "items": items,
+        },
+    }
 
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)) -> Product:
@@ -180,3 +184,51 @@ def delete_product(product_id: int, db: Session = Depends(get_db)) -> None:
     db.delete(product)
     db.commit()
     invalidate_products_cache()
+
+@router.patch("/{product_id}", response_model=ProductResponse)
+def patch_product(
+    product_id: int,
+    product_data: ProductPatch,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    product = db.get(Product, product_id)
+
+    if product is None:
+        raise HTTPException(404, "Product not found")
+
+    changes = product_data.model_dump(exclude_unset=True)
+
+    if not changes:
+        raise HTTPException(400, "Provide at least one field")
+
+    allowed_fields = {
+        "name", "description", "unit_price",
+        "status", "category_id",
+    }
+
+    if set(changes) - allowed_fields:
+        raise HTTPException(422, "Unsupported fields")
+
+    for field in ("name", "unit_price", "status"):
+        if field in changes and changes[field] is None:
+            raise HTTPException(422, f"{field} cannot be null")
+
+    if "category_id" in changes:
+        category_id = changes["category_id"]
+        if category_id is not None and db.get(Category, category_id) is None:
+            raise HTTPException(404, "Category not found")
+
+    for field, value in changes.items():
+        setattr(product, field, value)
+
+    try:
+        db.commit()
+        db.refresh(product)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Could not update product")
+
+    invalidate_products_cache()
+
+    return product

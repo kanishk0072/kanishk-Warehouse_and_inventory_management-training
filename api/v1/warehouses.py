@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from auth_dependencies import require_manager_or_admin
+from auth_dependencies import require_manager_or_admin, get_current_user
 from database import get_db
 from models import User, Warehouse
 from schemas import (
