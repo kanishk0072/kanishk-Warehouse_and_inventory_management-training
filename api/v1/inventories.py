@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from redis_client import redis_client
 
 from auth_dependencies import get_current_user
 from database import get_db
@@ -111,6 +112,9 @@ def create_stock_movement(
 
         db.add(movement)
         db.commit()
+        redis_client.delete(
+            f"dashboard:warehouse:{warehouse_id}:v1"
+        )
         db.refresh(movement)
 
     except IntegrityError:

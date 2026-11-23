@@ -8,11 +8,12 @@ from api.v1 import (
     warehouses,
     inventories,
     # stock_movements,
+    dashboard,
 )
 
 
 resource_routers = (
-    auth.router, products.router, categories.router, warehouses.router, users.router, inventories.router, #stock_movements.router,
+    auth.router, products.router, categories.router, warehouses.router, users.router, inventories.router, dashboard.router #stock_movements.router,
 )
 
 api_router = APIRouter()
