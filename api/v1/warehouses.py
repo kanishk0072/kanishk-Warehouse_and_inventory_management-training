@@ -20,7 +20,7 @@ router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 def require_warehouse_access(
     warehouse_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_manager_or_admin),
+    current_user: User = Depends(require_manager_or_admin),
 ) -> Warehouse:
 
     warehouse = db.get(Warehouse, warehouse_id)
@@ -31,15 +31,15 @@ def require_warehouse_access(
             detail="Warehouse not found",
         )
 
-    # Admin can access any warehouse
-    if user.role == "admin":
+    # Admin has access to every warehouse
+    if current_user.role == "admin":
         return warehouse
 
-    # Manager can access only their owned warehouse
-    if warehouse.owner_id != user.id:
+    # Manager can access only assigned warehouse
+    if current_user.warehouse_id != warehouse.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this warehouse",
+            detail="You are not assigned to this warehouse",
         )
 
     return warehouse
