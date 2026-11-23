@@ -52,5 +52,6 @@ class User(Base):
     )
 
     warehouse: Mapped[Warehouse | None] = relationship(
-        back_populates="users"
+        back_populates="users",
+        foreign_keys=[warehouse_id],
     )

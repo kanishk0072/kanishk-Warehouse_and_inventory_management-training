@@ -4,6 +4,7 @@ from .user import User
 from .warehouse import Warehouse
 from .inventory import Inventory
 from .stock_movement import StockMovement
+from .warehouse_member import WarehouseMember
 
 __all__ = [
     "Category",
@@ -12,4 +13,5 @@ __all__ = [
     "Warehouse",
     "Inventory",
     "StockMovement",
+    "WarehouseMember",
 ]
