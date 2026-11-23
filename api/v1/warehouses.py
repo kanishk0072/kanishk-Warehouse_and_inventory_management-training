@@ -17,6 +17,32 @@ from dependencies.pagination import get_pagination
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 
+def require_warehouse_access(
+    warehouse_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_manager_or_admin),
+) -> Warehouse:
+
+    warehouse = db.get(Warehouse, warehouse_id)
+
+    if warehouse is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Warehouse not found",
+        )
+
+    # Admin can access any warehouse
+    if user.role == "admin":
+        return warehouse
+
+    # Manager can access only their owned warehouse
+    if warehouse.owner_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this warehouse",
+        )
+
+    return warehouse
 
 @router.post(
     "",
@@ -28,7 +54,11 @@ def create_warehouse(
     current_user: User = Depends(require_manager_or_admin),
     db: Session = Depends(get_db),
 ):
-    warehouse = Warehouse(**warehouse_data.model_dump())
+    warehouse = Warehouse(
+    name=warehouse_data.name,
+    location=warehouse_data.location,
+    owner_id=current_user.id,
+    )
     db.add(warehouse)
 
     try:
@@ -47,6 +77,7 @@ def create_warehouse(
 def list_warehouses(
     db: Session = Depends(get_db),
     pagination: dict[str, int] = Depends(get_pagination),
+
 ) -> list[Warehouse]:
     
     warehouses = db.scalars(
@@ -58,7 +89,10 @@ def list_warehouses(
 
     return warehouses
 
-@router.get("/{warehouse_id}", response_model=WarehouseResponse)
+@router.get("/{warehouse_id}",
+    response_model=WarehouseResponse, 
+    dependencies=[Depends(require_warehouse_access)],
+)
 def get_warehouse(
     warehouse_id: int,
     db: Session = Depends(get_db),
@@ -74,7 +108,10 @@ def get_warehouse(
     return warehouse
 
 
-@router.put("/{warehouse_id}", response_model=WarehouseResponse)
+@router.put("/{warehouse_id}",
+    response_model=WarehouseResponse,
+    dependencies=[Depends(require_warehouse_access)],
+)
 def update_warehouse(
     warehouse_id: int,
     warehouse_data: WarehouseUpdate,
@@ -104,7 +141,10 @@ def update_warehouse(
     return warehouse
 
 
-@router.patch("/{warehouse_id}", response_model=WarehouseResponse)
+@router.patch("/{warehouse_id}",
+    response_model=WarehouseResponse,
+    dependencies=[Depends(require_warehouse_access)],
+)
 def patch_warehouse(
     warehouse_id: int,
     warehouse_data: WarehousePatch,
@@ -152,6 +192,7 @@ def patch_warehouse(
     "/{warehouse_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
+    dependencies=[Depends(require_warehouse_access)],
 )
 def delete_warehouse(
     warehouse_id: int,
@@ -189,3 +230,4 @@ def delete_warehouse(
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
